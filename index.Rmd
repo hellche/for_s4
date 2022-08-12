@@ -365,6 +365,8 @@ table1(~ as.character(MentorshipType),
 
 <br/>
 
+#### Figure 2:
+
 ```{r}
 df <- connect_names_my %>% group_by(ResearchArea_m) %>% filter(n() > 5000) %>% ungroup()
 
@@ -380,7 +382,8 @@ lvls <- as.character(plot_order$ResearchArea_m)
 pic1 <- df %>% 
   mutate(ResearchArea_m = factor(ResearchArea_m, levels = lvls)) %>%
   ggplot(aes(ResearchArea_m, fill = MentorshipType)) +
-  geom_bar(position = "fill", color = "white") +
+  #geom_bar(position = "fill", color = "white") +
+  geom_bar(position = position_fill(reverse = TRUE), color = "white") +
   #facet_grid(~type_diss) + 
   scale_y_continuous(labels=scales::percent) +
   coord_flip() + 
@@ -403,8 +406,8 @@ pic1 <- df %>%
         legend.justification='center') + 
   theme(legend.title=element_blank()) +
   theme(legend.text = element_text(size=7)) +
-  theme(legend.key.size = unit(0.3, 'cm')) +
-  guides(fill = guide_legend(reverse = TRUE))
+  theme(legend.key.size = unit(0.3, 'cm')) #+
+  #guides(fill = guide_legend(reverse = TRUE))
 
 pic2 <- df %>% 
   mutate(ResearchArea_m = factor(ResearchArea_m, levels = lvls)) %>%
@@ -651,7 +654,7 @@ table1(~as.factor(Mentee_count_type), data = connect_list2)
 ```
 
 
-#### Figure 5: One trainee in a particular `StopYear` is the main case
+#### Figure 4: One trainee in a particular `StopYear` is the main case
 
 ```{r}
 df <- connect_list2 %>% group_by(ResearchArea_m) %>% filter(n() > 5000) %>% ungroup() %>% 
@@ -722,7 +725,7 @@ pic2 <- df %>%
 pic1  + pic2
 ```
 
-#### Figure 6: And again a story about the structure of the data by year 
+#### Figure 5: And again a story about the structure of the data by year 
 
 ```{r}
 connect_list2 %>%
@@ -735,7 +738,7 @@ connect_list2 %>%
         plot.caption = element_text(hjust = 0, face = "italic", size = 9))
 ```
 
-### How mentors and interns are matched
+#### Figure 6: How mentors and interns are matched
 
 
 ```{r}
@@ -807,5 +810,5 @@ pic2 <- df %>%
   theme(legend.title=element_blank()) +
   guides(fill = guide_legend(reverse = TRUE))
 
-pic1 + pic2 
+pic1 #+ pic2 
 ```
