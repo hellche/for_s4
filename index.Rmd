@@ -721,6 +721,7 @@ pic2 <- df %>%
 
 pic1  + pic2
 ```
+
 #### Figure 6: And again a story about the structure of the data by year 
 
 ```{r}
@@ -808,7 +809,3 @@ pic2 <- df %>%
 
 pic1 + pic2 
 ```
-
-
-
-
