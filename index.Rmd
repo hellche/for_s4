@@ -44,6 +44,7 @@ library(knitr)
 library(tokenizers)
 library(kableExtra)
 library(readxl)
+library(statip)
 ```
 
 ```{r functions}
@@ -65,11 +66,11 @@ pvalue <- function(x, ...) {
 ```
 
 ```{r}
-connect_names_my <- read_delim("connect_names_my", 
+connect_names_my <- read_delim("data/connect_names_my", 
     delim = "\t", escape_double = FALSE, 
     trim_ws = TRUE) %>% select(-1)
 
-first_name_gender <- read_csv("first_name_gender.csv")  %>% distinct(FirstName, gender, .keep_all = TRUE)
+first_name_gender <- read_csv("data/first_name_gender.csv")  %>% distinct(FirstName, gender, .keep_all = TRUE)
 #colnames(connect_names_my)
 
 connect_names_my <- connect_names_my %>% 
@@ -464,7 +465,11 @@ Conditions then mentor entering the "Family"(?) - need to look at reverse logic?
 
 ## First look on posssible types of "families"
 
+### How many mantors have a trainee
+
 ```{r , eval=FALSE}
+
+# Duplicates analisis
 
 #(!) `CID` is unique, but `group_by(MenteeID, MentorID, StopYear)` not unique, we have "duplicates"(?) of trainee-mentor collaboration, and its duplicates belong to same `StopYear` (24 duplicates):
 
@@ -509,48 +514,42 @@ connect_list <- connect_names_my %>% filter(MentorshipType == '1=graduate studen
   group_by(MenteeID, StopYear, ResearchArea_t) %>% 
   summarise(MentorID_all = toString(MentorID),
             ResearchArea_m_all = toString(ResearchArea_m),
-            Mentor_count=length(ResearchArea_t)) %>% ungroup()
+            Mentor_count=length(ResearchArea_t)) %>% ungroup() %>% 
+    mutate(Mentor_count_type = case_when(Mentor_count >=3 ~ "3 and more",
+                                       TRUE ~ as.character(Mentor_count)))
 ```
 
 
 #### Figure 3: Ugly graph, sorry, but explicitly shows that one mentor is the major case
 
 ```{r, eval=FALSE}
-table1(~as.character(Mentor_count), data = connect_list)
-```
-
-
-```{r, eval=FALSE}
-connect_list %>%
-  ggplot(aes(as.character(Mentor_count))) +
-  geom_histogram(stat="count") +
-  facet_wrap(~ ResearchArea_t, nrow = 3) +  
-  theme_classic() 
+table1(~as.character(Mentor_count_type), data = connect_list)
 ```
 
 
 
 ```{r}
 df <- connect_list %>% group_by(ResearchArea_t) %>% filter(n() > 5000) %>% ungroup() %>% 
-  mutate(Mentor_count = as.character(Mentor_count))
+  mutate(Mentor_count_type = as.character(Mentor_count_type))
 
 plot_order <- df %>%
-  count(ResearchArea_t, Mentor_count) %>%
+  count(ResearchArea_t, Mentor_count_type) %>%
   group_by(ResearchArea_t) %>%
   mutate(prop = prop.table(n)) %>%
-  filter(Mentor_count == 1) %>%
+  filter(Mentor_count_type == 1) %>%
   arrange(prop)
 
 lvls <- as.character(plot_order$ResearchArea_t)
 
 pic1 <- df %>% 
   mutate(ResearchArea_t = factor(ResearchArea_t, levels = lvls)) %>%
-  ggplot(aes(ResearchArea_t, fill = Mentor_count)) +
-  geom_bar(position = "fill", color = "white") +
+  ggplot(aes(ResearchArea_t, fill = Mentor_count_type)) +
+  #geom_bar(position = "fill", color = "white") +
+  geom_bar(position = position_fill(reverse = TRUE), color = "white") +
   #facet_grid(~type_diss) + 
   scale_y_continuous(labels=scales::percent) +
   coord_flip() + 
-  #scale_fill_manual(values=c( "#ffe043","#91C45A", "#C19AD6","#8F8F8F", "blue"),
+  scale_fill_manual(values=c("#91C45A", "#ff9999","#C19AD6")) +
  #                   labels=c('0=udergr','1=grad', '2=postdoc','3=resear', '4=?')
   #                  )+
   labs(caption = "Areas with n > 5000", fill = "mentor\ncount") +
@@ -569,8 +568,8 @@ pic1 <- df %>%
         legend.justification='center') + 
   theme(legend.title=element_text(size=7)) +
   theme(legend.text = element_text(size=7)) +
-  theme(legend.key.size = unit(0.3, 'cm')) +
-  guides(fill = guide_legend(reverse = TRUE))
+  theme(legend.key.size = unit(0.3, 'cm')) # +
+  #guides(fill = guide_legend(reverse = TRUE))
 
 pic2 <- df %>% 
   mutate(ResearchArea_t = factor(ResearchArea_t, levels = lvls)) %>%
@@ -601,8 +600,214 @@ pic1
 About 98.2% of trainees have one mentor and 1.6% of trainees have two mentors.
 
 
+### How many trainees have a mentor
 
 
+```{r, eval = FALSE}
+connect_names_my %>% filter(MentorshipType == '1=graduate student') %>% 
+  distinct(MenteeID, MentorID, StopYear, .keep_all = TRUE) %>% 
+  filter(StopYear >=1960 & StopYear <= 2020) %>% 
+  group_by(MentorID, StopYear, ResearchArea_m) %>% 
+  summarise(MenteeID_all = toString(MenteeID),
+            ResearchArea_t_all = toString(ResearchArea_t),
+            Mentee_count=length(ResearchArea_m)) %>%
+  ungroup() %>% arrange(desc(Mentee_count)) %>% head(1000) %>% 
+  select(1:3, Mentee_count, MentorID_all,ResearchArea_m_all) %>% 
+  DT::datatable(options = list(
+    #columnDefs = list(list(className = 'dt-center', targets = 5)),
+    pageLength = 5
+)) 
+```
+
+
+```{r}
+connect_list <- connect_names_my %>% filter(MentorshipType == '1=graduate student') %>% 
+  group_by(ResearchArea_m) %>% filter(n() > 5000) %>% ungroup() %>% 
+  distinct(MenteeID, MentorID, StopYear, .keep_all = TRUE) %>% 
+  filter(StopYear >=1960 & StopYear <= 2020) %>% 
+  group_by(MentorID, StopYear, ResearchArea_m) %>% 
+  summarise(MenteeID_all = toString(MenteeID),
+            ResearchArea_t_all = toString(ResearchArea_t),
+            Mentee_count=length(ResearchArea_m)) %>% ungroup()
+
+
+connect_list2 <- connect_names_my %>% filter(MentorshipType == '1=graduate student') %>% 
+  group_by(ResearchArea_m) %>% filter(n() > 5000) %>% ungroup() %>% 
+  distinct(MenteeID, MentorID, StopYear, .keep_all = TRUE) %>% 
+  filter(StopYear >=1960 & StopYear <= 2020) %>% 
+  group_by(MentorID, StopYear, ResearchArea_m) %>% 
+  summarise(MenteeID_all = toString(MenteeID),
+            ResearchArea_t_all = toString(ResearchArea_t),
+            Mentee_count=length(ResearchArea_m)) %>% ungroup() %>% 
+  mutate(Mentee_count_type = case_when(Mentee_count >=5 ~ "5 and more",
+                                       TRUE ~ as.character(Mentee_count)))
+```
+
+#### Table 3: 78.4% of mentors (graduate `MentorshipType` only) had one trainee in particular `StopYear` 
+
+```{r}
+#table1(~as.factor(Mentee_count), data = connect_list)
+table1(~as.factor(Mentee_count_type), data = connect_list2)
+```
+
+
+#### Figure 5: One trainee in a particular `StopYear` is the main case
+
+```{r}
+df <- connect_list2 %>% group_by(ResearchArea_m) %>% filter(n() > 5000) %>% ungroup() %>% 
+  mutate(Mentee_count_type = as.character(Mentee_count_type))
+
+plot_order <- df %>%
+  count(ResearchArea_m, Mentee_count_type) %>%
+  group_by(ResearchArea_m) %>%
+  mutate(prop = prop.table(n)) %>%
+  filter(Mentee_count_type == 1) %>%
+  arrange(prop)
+
+lvls <- as.character(plot_order$ResearchArea_m)
+
+pic1 <- df %>% 
+  mutate(ResearchArea_m = factor(ResearchArea_m, levels = lvls)) %>%
+  ggplot(aes(ResearchArea_m, fill = Mentee_count_type)) +
+  geom_bar(position = position_fill(reverse = TRUE), color = "white") +
+  #geom_bar(position = "fill", color = "white") +
+  #facet_grid(~type_diss) + 
+  scale_y_continuous(labels=scales::percent) +
+  coord_flip() + 
+  scale_fill_manual(values=c("#8F8F8F","#ff9999", "#ffe043","#91C45A", "#C19AD6")) +
+ #                   labels=c('0=udergr','1=grad', '2=postdoc','3=resear', '4=?')
+  #                  )+
+  labs(caption = "Areas with n > 5000", fill = "mentee\ncount") +
+  theme_classic() +
+  theme(axis.title.y.right = element_blank(),                 
+        axis.text.y.right = element_blank(),                 
+        axis.ticks.y = element_blank(),                      
+        axis.text.y = element_text(margin = margin(r = 0)),  
+        panel.spacing = unit(5, "mm"),   
+        plot.caption = element_text(hjust = 0, face = "italic", size = 9),
+        strip.background = element_blank())     +
+    theme(axis.title = element_blank()) +
+    theme(strip.text.y = element_text(angle = 0),
+          strip.text.x = element_text(size = 11)) +
+    theme(legend.position = "top",
+        legend.justification='center') + 
+  theme(legend.title=element_text(size=7)) +
+  theme(legend.text = element_text(size=7)) +
+  theme(legend.key.size = unit(0.3, 'cm')) #+
+  #guides(fill = guide_legend(reverse = TRUE))
+
+pic2 <- df %>% 
+  mutate(ResearchArea_m = factor(ResearchArea_m, levels = lvls)) %>%
+  ggplot(aes(ResearchArea_m)) +
+  geom_bar(colour = "white") +
+  #facet_grid(~type_diss) + 
+  #scale_y_continuous(labels=scales::percent) +
+  coord_flip() + 
+  labs(y="n") +
+  theme_classic() +
+  theme(axis.title.y.right = element_blank(),                 
+        axis.text.y.right = element_blank(),                 
+        axis.ticks.y = element_blank(),                      
+        axis.text.y = element_blank(),        
+        panel.spacing = unit(5, "mm"),                       
+        strip.background = element_blank())     +
+    theme(axis.title.y = element_blank()) +
+    theme(strip.text.y = element_text(angle = 0),
+          strip.text.x = element_text(size = 11)) +
+    theme(legend.position = "top",
+        legend.justification='center') + 
+  theme(legend.title=element_blank()) +
+  guides(fill = guide_legend(reverse = TRUE))
+
+pic1  + pic2
+```
+#### Figure 6: And again a story about the structure of the data by year 
+
+```{r}
+connect_list2 %>%
+  ggplot(aes(StopYear, as.character(Mentee_count_type))) +
+  geom_jitter(size=0.5, alpha = 0.05) +
+  labs(caption = "StopYear >=1960 & StopYear <= 2020;\nAreas with n > 5000", y = "Mentee count\n(mentor had in a particular year)") +
+  facet_wrap(~ ResearchArea_m, nrow = 3) +  theme_classic() +
+  theme(axis.text.x = element_text(size = 6, angle = 90),
+        strip.text.x = element_text(size = 8),
+        plot.caption = element_text(hjust = 0, face = "italic", size = 9))
+```
+
+### How mentors and interns are matched
+
+
+```{r}
+df <- connect_names_my %>% group_by(ResearchArea_t) %>% filter(n() > 5000) %>% ungroup() %>% 
+  mutate(match = case_when(gender_t == 'man' & gender_m == 'man'~ "man + man",
+                           gender_t == 'man' & gender_m == 'woman'~ "woman_m + man_t",
+                           gender_t == 'woman' & gender_m == 'woman'~ "woman + woman",
+                           gender_t == 'woman' & gender_m == 'man'~ "man_m + woman_t",
+                           TRUE ~ "unknown") ) %>% filter(match != 'unknown')
+
+plot_order <- df %>%
+  count(ResearchArea_t, match) %>%
+  group_by(ResearchArea_t) %>%
+  mutate(prop = prop.table(n)) %>%
+  filter(match == "man + man") %>%
+  arrange(prop)
+
+lvls <- as.character(plot_order$ResearchArea_t)
+
+pic1 <- df %>% 
+  mutate(ResearchArea_t = factor(ResearchArea_t, levels = lvls)) %>%
+  ggplot(aes(ResearchArea_t, fill = match)) +
+  geom_bar(position = "fill", color = "white") +
+  #facet_grid(~type_diss) + 
+  scale_y_continuous(labels=scales::percent) +
+  coord_flip() + 
+  scale_fill_manual(values=c("#91C45A","#8F8F8F", "#C19AD6", "#ff9999")#,
+                    #labels=c('man','woman', 'unknown')
+                    )+
+  labs(caption = "Areas with n > 5000") +
+theme_classic() +
+  theme(axis.title.y.right = element_blank(),                 
+        axis.text.y.right = element_blank(),                 
+        axis.ticks.y = element_blank(),                      
+        axis.text.y = element_text(margin = margin(r = 0)),  
+        panel.spacing = unit(5, "mm"),   
+        plot.caption = element_text(hjust = 0, face = "italic", size = 9),
+        strip.background = element_blank())     +
+    theme(axis.title = element_blank()) +
+    theme(strip.text.y = element_text(angle = 0),
+          strip.text.x = element_text(size = 11)) +
+    theme(legend.position = "top",
+        legend.justification='center') + 
+  theme(legend.title=element_blank()) +
+  guides(fill = guide_legend(reverse = TRUE))# +
+  #theme(strip.text.x = element_text(face="bold")) +
+  #guides(fill = guide_legend(reverse = TRUE)) 
+
+pic2 <- df %>% 
+  mutate(ResearchArea_t = factor(ResearchArea_t, levels = lvls)) %>%
+  ggplot(aes(ResearchArea_t)) +
+  geom_bar(colour = "white") +
+  #facet_grid(~type_diss) + 
+  #scale_y_continuous(labels=scales::percent) +
+  coord_flip() + 
+  labs(x="count") +
+  theme_classic() +
+  theme(axis.title.y.right = element_blank(),                 
+        axis.text.y.right = element_blank(),                 
+        axis.ticks.y = element_blank(),                      
+        axis.text.y = element_blank(),        
+        panel.spacing = unit(5, "mm"),                       
+        strip.background = element_blank())     +
+    theme(axis.title.y = element_blank()) +
+    theme(strip.text.y = element_text(angle = 0),
+          strip.text.x = element_text(size = 11)) +
+    theme(legend.position = "top",
+        legend.justification='center') + 
+  theme(legend.title=element_blank()) +
+  guides(fill = guide_legend(reverse = TRUE))
+
+pic1 + pic2 
+```
 
 
 
